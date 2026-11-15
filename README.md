@@ -53,3 +53,7 @@ The GPIO-switched domains are active high and off after reset. Power domains are
 - BSP conventions and generic examples: [espressif/esp-bsp](https://github.com/espressif/esp-bsp); the display, touch, SD card and camera code is ported from its ESP32-P4 Function EV Board BSP.
 - Phone UI: [espressif/esp-brookesia](https://github.com/espressif/esp-brookesia).
 - Where to buy the board: [KSDIY store on Taobao](https://item.taobao.com/item.htm?id=667230365314) (the link printed by the vendor BSP).
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE). Bundled third-party components and fonts keep their own licenses (see the license files next to them).
