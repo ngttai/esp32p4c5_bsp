@@ -1,0 +1,6 @@
+description: KSDIY ESP32-P4C5 hardware test app
+
+dependencies:
+  esp32p4c5_bsp:
+    version: '*'
+    override_path: ../../../bsp/esp32p4c5_bsp
