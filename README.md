@@ -54,6 +54,10 @@ The GPIO-switched domains are active high and off after reset. Power domains are
 - Phone UI: [espressif/esp-brookesia](https://github.com/espressif/esp-brookesia).
 - Where to buy the board: [KSDIY store on Taobao](https://item.taobao.com/item.htm?id=667230365314) (the link printed by the vendor BSP).
 
+## Disclaimer
+
+This is an unofficial, community project made for research and learning. It is not affiliated with or endorsed by KSDIY or Espressif. The vendor documents in `docs/hw_specs` (schematic, datasheet) belong to their owners and are included for reference only. Everything here is provided as is, without warranty: use it at your own risk.
+
 ## License
 
 Apache License 2.0, see [LICENSE](LICENSE). Bundled third-party components and fonts keep their own licenses (see the license files next to them).
