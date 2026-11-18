@@ -11,6 +11,7 @@
 #include "driver/i2c_master.h"
 #include "driver/i2s_std.h"
 #include "esp_codec_dev.h"
+#include "sd_protocol_types.h"
 #include "iot_button.h"
 #include "bsp/config.h"
 #include "bsp/display.h"
@@ -372,6 +373,24 @@ esp_err_t bsp_sdcard_mount(void);
  * @return ESP_OK on success
  */
 esp_err_t bsp_sdcard_unmount(void);
+
+/**
+ * @brief Power and initialize the microSD card without mounting a filesystem
+ *
+ * For raw sector access, for example a USB mass storage device. The card must not be mounted;
+ * release it with bsp_sdcard_raw_deinit() before calling bsp_sdcard_mount() again.
+ *
+ * @param[out] card Initialized card, owned by the BSP
+ * @return ESP_OK on success, ESP_ERR_INVALID_STATE if mounted or already initialized
+ */
+esp_err_t bsp_sdcard_raw_init(sdmmc_card_t **card);
+
+/**
+ * @brief Release the card of bsp_sdcard_raw_init()
+ *
+ * @return ESP_OK on success
+ */
+esp_err_t bsp_sdcard_raw_deinit(void);
 
 /**************************************************************************************************
  *

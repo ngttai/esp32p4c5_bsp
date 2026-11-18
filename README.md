@@ -30,7 +30,7 @@ Each example pulls the BSP from `bsp/esp32p4c5_bsp` through `main/idf_component.
 - Audio: `bsp_audio_init()`, `bsp_audio_codec_speaker_init()`, `bsp_audio_codec_microphone_init()` (esp_codec_dev handles).
 - Buttons: `bsp_iot_button_create()` for BOOT (GPIO35) and IO0 (GPIO0), used with the espressif/button API.
 - IMU: `bsp_imu_init()`, `bsp_imu_read()`.
-- microSD: `bsp_sdcard_mount()`, `bsp_sdcard_unmount()` (never formats the card).
+- microSD: `bsp_sdcard_mount()`, `bsp_sdcard_unmount()` (never formats the card); `bsp_sdcard_raw_init()`, `bsp_sdcard_raw_deinit()` for raw sector access without a filesystem (a USB mass storage drive, for example). The SDMMC host is shared with the SDIO link of the ESP32-C5 (slot 1): the raw deinit releases slot 0 only.
 - Camera: `bsp_camera_start()`, `bsp_camera_stop()` (esp_video, V4L2 device).
 - Wi-Fi: `bsp_wifi_init()` (station mode through the ESP32-C5, ESP-Hosted).
 - Battery and power key: `bsp_battery_get_info()`, `bsp_pmic_event_register()`, `bsp_power_off()`.

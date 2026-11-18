@@ -1,4 +1,4 @@
-version: "0.1.0"
+version: "0.2.0"
 description: Board Support Package (BSP) for the KSDIY ESP32-P4/C5 4.3" board, following esp-bsp conventions
 
 targets:

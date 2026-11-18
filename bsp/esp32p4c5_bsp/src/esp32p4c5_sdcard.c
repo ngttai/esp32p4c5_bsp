@@ -4,6 +4,7 @@
  * The card is powered from on-chip LDO channel 4 (ESP_LDO_VO4).
  * Ported from the esp-bsp ESP32-P4 Function EV Board BSP.
  */
+#include <stdlib.h>
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "driver/sdmmc_host.h"
@@ -18,12 +19,29 @@ static const char *TAG = "esp32p4c5_sd";
 static sdmmc_card_t *s_card;
 static sd_pwr_ctrl_handle_t s_pwr_ctrl;
 static bool s_mounted;
+static bool s_raw;              /* s_card is initialized by bsp_sdcard_raw_init() */
+
+static void make_host(sdmmc_host_t *host, sdmmc_slot_config_t *slot)
+{
+    *host = (sdmmc_host_t)SDMMC_HOST_DEFAULT();
+    host->slot = SDMMC_HOST_SLOT_0;
+    host->max_freq_khz = SDMMC_FREQ_HIGHSPEED;
+    host->pwr_ctrl_handle = s_pwr_ctrl;
+
+    *slot = (sdmmc_slot_config_t) {
+        0
+    };
+    slot->cd = SDMMC_SLOT_NO_CD;
+    slot->wp = SDMMC_SLOT_NO_WP;
+    slot->width = 4;
+}
 
 esp_err_t bsp_sdcard_mount(void)
 {
     if (s_mounted) {
         return ESP_OK;
     }
+    ESP_RETURN_ON_FALSE(!s_raw, ESP_ERR_INVALID_STATE, TAG, "card in raw use");
 
     sd_pwr_ctrl_ldo_config_t ldo_config = {
         .ldo_chan_id = BSP_SD_LDO_CHAN,
@@ -31,15 +49,9 @@ esp_err_t bsp_sdcard_mount(void)
     ESP_RETURN_ON_ERROR(sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &s_pwr_ctrl), TAG,
                         "create on-chip LDO power control failed");
 
-    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.slot = SDMMC_HOST_SLOT_0;
-    host.max_freq_khz = SDMMC_FREQ_HIGHSPEED;
-    host.pwr_ctrl_handle = s_pwr_ctrl;
-
-    sdmmc_slot_config_t slot = {0};
-    slot.cd = SDMMC_SLOT_NO_CD;
-    slot.wp = SDMMC_SLOT_NO_WP;
-    slot.width = 4;
+    sdmmc_host_t host;
+    sdmmc_slot_config_t slot;
+    make_host(&host, &slot);
 
     const esp_vfs_fat_sdmmc_mount_config_t mount_config = {
         .format_if_mount_failed = false,
@@ -73,5 +85,73 @@ esp_err_t bsp_sdcard_unmount(void)
         s_pwr_ctrl = NULL;
     }
     s_mounted = false;
+    return ESP_OK;
+}
+
+esp_err_t bsp_sdcard_raw_init(sdmmc_card_t **card)
+{
+    ESP_RETURN_ON_FALSE(card, ESP_ERR_INVALID_ARG, TAG, "card is NULL");
+    ESP_RETURN_ON_FALSE(!s_mounted && !s_raw, ESP_ERR_INVALID_STATE, TAG, "card mounted or in raw use");
+
+    sd_pwr_ctrl_ldo_config_t ldo_config = {
+        .ldo_chan_id = BSP_SD_LDO_CHAN,
+    };
+    ESP_RETURN_ON_ERROR(sd_pwr_ctrl_new_on_chip_ldo(&ldo_config, &s_pwr_ctrl), TAG,
+                        "create on-chip LDO power control failed");
+
+    sdmmc_host_t host;
+    sdmmc_slot_config_t slot;
+    make_host(&host, &slot);
+
+    esp_err_t ret = ESP_ERR_NO_MEM;
+    bool host_up = false;
+    s_card = calloc(1, sizeof(sdmmc_card_t));
+    if (!s_card) {
+        goto fail;
+    }
+    ret = sdmmc_host_init();     /* returns the running host when the SDIO link has it already */
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        goto fail;
+    }
+    ret = sdmmc_host_init_slot(host.slot, &slot);
+    if (ret != ESP_OK) {
+        goto fail;
+    }
+    host_up = true;
+    ret = sdmmc_card_init(&host, s_card);
+    if (ret != ESP_OK) {
+        goto fail;
+    }
+    s_raw = true;
+    *card = s_card;
+    ESP_LOGI(TAG, "card ready for raw access");
+    return ESP_OK;
+
+fail:
+    ESP_LOGE(TAG, "raw init failed: %s", esp_err_to_name(ret));
+    if (host_up) {
+        sdmmc_host_deinit_slot(SDMMC_HOST_SLOT_0);
+    }
+    free(s_card);
+    s_card = NULL;
+    sd_pwr_ctrl_del_on_chip_ldo(s_pwr_ctrl);
+    s_pwr_ctrl = NULL;
+    return ret;
+}
+
+esp_err_t bsp_sdcard_raw_deinit(void)
+{
+    if (!s_raw) {
+        return ESP_OK;
+    }
+    /* Slot 0 only: the SDMMC host also runs the ESP-Hosted SDIO link of the C5 on slot 1 */
+    sdmmc_host_deinit_slot(SDMMC_HOST_SLOT_0);
+    free(s_card);
+    s_card = NULL;
+    if (s_pwr_ctrl) {
+        sd_pwr_ctrl_del_on_chip_ldo(s_pwr_ctrl);
+        s_pwr_ctrl = NULL;
+    }
+    s_raw = false;
     return ESP_OK;
 }
