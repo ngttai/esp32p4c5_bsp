@@ -38,6 +38,52 @@ Each example pulls the BSP from `bsp/esp32p4c5_bsp` through `main/idf_component.
 
 The GPIO-switched domains are active high and off after reset. Power domains are not initialized automatically at boot.
 
+## ESP32-P4 cache workaround
+
+Since v0.2.1 the BSP includes a fix for a boot crash of the ESP32-P4 (chip rev v3.x) on ESP-IDF v6.1. Apps that use the BSP get it automatically.
+
+### Symptom
+
+At boot, before or just after `app_main()`, the chip panics with a `Store access fault`. The backtrace ends in the ROM `memset` called from `prvInitialiseNewTask` (FreeRTOS clearing a new task stack). Whether it happens depends on the memory layout of the build: adding or removing unrelated code or data can make it appear or go away. In the phone example, an affected layout crashed in 2 to 8 boots out of 8.
+
+### Cause
+
+`cache_hal_init()` in ESP-IDF v6.1 sets the cache preload strategy (`undef_op`) of every cache level to `CACHE_LL_PRELOAD_ARBITRARY` (2, random arbitration). On the ESP32-P4 this is a hardware livelock in the L1 D-cache when one core spins on a cached address while the other core takes a cache miss. At boot, CPU1 spins in this way while it waits for the scheduler on CPU0, so CPU0's memory accesses can fail. Espressif confirmed this in [esp-idf#19369](https://github.com/espressif/esp-idf/issues/19369).
+
+### Fix
+
+As Espressif advised in that issue, only the L1 D-cache is set back to round-robin (`CACHE_LL_PRELOAD_UNTIL_FETCH_DONE`, 0). The L1 I-cache and the L2 cache keep the value 2 that IDF sets, so their preload performance is unchanged.
+
+The fix is in [`bsp/esp32p4c5_bsp/src/esp32p4c5_cache_fix.c`](bsp/esp32p4c5_bsp/src/esp32p4c5_cache_fix.c):
+
+```c
+__attribute__((constructor(101))) void esp32p4c5_bsp_l1_dcache_round_robin(void)
+{
+    cache_ll_preload_set_strategy(1, CACHE_TYPE_DATA, CACHE_LL_ID_ALL, CACHE_LL_PRELOAD_UNTIL_FETCH_DONE);
+}
+```
+
+- It is a global constructor with priority 101, the earliest priority for application code. It runs during startup, before the other constructors, before the FreeRTOS scheduler starts and before `app_main()`.
+- It is compiled only for the ESP32-P4 when the minimum supported chip revision is v3.0 or later (`HAL_CONFIG(CHIP_SUPPORT_MIN_REV) >= 300`, from `CONFIG_ESP_REV_MIN_FULL`). On older revisions IDF does not change this register either. Otherwise the file only defines an empty function with the same name.
+- Nothing in an app calls this function, so the linker would normally drop the object file from `libesp32p4c5_bsp.a`. The component `CMakeLists.txt` adds `-u esp32p4c5_bsp_l1_dcache_round_robin` to the link of every app that depends on the BSP, which keeps the file and its `.init_array` entry.
+
+With the fix, the same phone layout booted 22 times out of 22 without a panic.
+
+### Check that an app has it
+
+After a build, the symbol must be in the ELF:
+
+```bash
+riscv32-esp-elf-nm build/<app>.elf | grep esp32p4c5_bsp_l1_dcache_round_robin
+```
+
+Its address must also appear in the `.flash.init_array` section (`riscv32-esp-elf-objdump -s -j .flash.init_array build/<app>.elf`, little endian).
+
+### Notes
+
+- Apps that already set the L1 D-cache to round-robin in their own constructor (for example the `esp32p4c5_phone` app, which carries it while it uses BSP v0.2.0) can keep it: writing the same value twice is harmless. It can be removed once the app uses this BSP version.
+- Remove this workaround once ESP-IDF ships a fix for esp-idf#19369 in `cache_hal_init()`.
+
 ## Documentation
 
 - [docs/hw_specs/hw_matrix.md](docs/hw_specs/hw_matrix.md): hardware matrix (parts, interfaces, pins, I2C map) and open questions.
