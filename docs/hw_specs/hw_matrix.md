@@ -27,7 +27,7 @@
 | 11 | Battery / charging | AXP2101 charger | Battery connector J2 (MX1.25-2P); 10 kΩ B3950 NTC on TS; red charge LED on CHGLED; power key BTN1 → PWRON | – | – | [sch] |
 | 12 | Audio DAC/codec | ES8311 | Slave mode; I2S TX 16 kHz, MCLK 256×; differential out to the amp; powered from ALDO3 | I2C0 + I2S0 | addr 0x18; MCLK = 13, SCLK = 12, LRCK = 10, DSDIN (P4 → codec) = 9 | [log], [sch], [pin] |
 | 13 | Speaker amp | NS4150B (mono class D) | Powered from AXP_VSYS; speaker connector J1 (MX1.25-2P) | GPIO enable, active high; off at boot | `PA_CTRL` = 3 (10 kΩ pull-down) | [sch], [pin] |
-| 14 | Audio ADC | ES7210 | Slave mode; TDM RX 16-bit 16 kHz; MIC1 + MIC2 = two on-board MEMS mics (MSM381A3729H9CP); MIC3 = AEC reference looped back from the ES8311 output; MIC4 unused | I2C0 + I2S0 TDM | addr 0x40 (AD0 = AD1 = GND); SDOUT (codec → P4) = 11; shares MCLK/SCLK/LRCK with ES8311 | [log], [sch], [pin] |
+| 14 | Audio ADC | ES7210 | Slave mode; TDM RX 16-bit 16 kHz (frame layout: section 1.4b); MIC1 + MIC2 = two on-board MEMS mics (MSM381A3729H9CP); MIC3 = AEC reference looped back from the ES8311 output; MIC4 unused | I2C0 + I2S0 TDM | addr 0x40 (AD0 = AD1 = GND); SDOUT (codec → P4) = 11; shares MCLK/SCLK/LRCK with ES8311 | [log], [sch], [pin] |
 | 15 | Camera | SC2336 / OV2710 (CSI) | Sensor PID 0xcb3a; `esp_video`; 24-pin 0.5 mm FPC; 2 data lanes; 24 MHz on-board oscillator for XCLK; reset by RC only (no GPIO); AVDD from ALDO4 (2.9 V) | MIPI-CSI + SCCB on I2C0 | addr 0x30; dedicated CSI pins | [log], [sch] |
 | 16 | USB HS | P4 high-speed USB | One port wired to both a Type-C (J3) and a Type-A host socket (VBUS from BOOST_5V); used by the stock "USB camera" page. Tested in the phone example: high-speed device on the Type-C socket (Second screen app, about 8.6 MB/s from a PC) and host on the Type-A socket with a UVC webcam (USB camera app) [test] | USB 2.0 HS | Dedicated DP/DM pins | [sch], [photo], [log] |
 | 17 | USB debug | USB-Serial/JTAG | Type-C "DEBUG" (J5) | USB FS | 24 / 25 | [sch], esptool |
@@ -114,6 +114,33 @@
 | 15 | GPIO29 | 16 | GPIO30 |
 | 17 | GND | 18 | GND |
 | 19 | RS485 B | 20 | RS485 A |
+
+### 1.4b Microphone frame and echo reference (measured 2026-11-24)
+
+- **Wiring** (schematic, block "ADC&AEC"): the ES8311 output `DAC_OUT_P/N` goes to the speaker amplifier and also, through R7 / R10
+  (0 ohm), to `ADC_MIC3_P/N` of the ES7210. **MIC3 is the speaker signal looped back in hardware**, taken before the amplifier: an
+  echo reference with no room sound in it. MIC1 and MIC2 are the two MEMS microphones; MIC4 is not connected.
+- **Mode**: the ES7210 outputs MIC3 only in TDM. The esp_codec_dev driver turns TDM on when 3 or more inputs are selected
+  (`mic_selected = MIC1 | MIC2 | MIC3`). The P4 side stays in **standard I2S**: open the microphone with **2 channels of
+  32 bits** (`BSP_MIC_CHANNELS`, `BSP_MIC_BITS`); each frame read is then **4 int16** (`BSP_MIC_FRAME_SLOTS`). No I2S TDM
+  driver is needed (the November 2026 attempt with an RX TDM channel crashed: no internal DMA memory left while esp-sr ran).
+- **Slot order** (int16 index inside a frame, measured with a 1 kHz tone played while recording, 3 s on / 3 s off):
+
+  | Index | Signal | Tone on | Tone off |
+  |---|---|---|---|
+  | 0 | MIC3, speaker reference (`BSP_MIC_SLOT_REF`) | 452 rms (volume 50 %, 0 dB) | exactly 0 |
+  | 1 | MIC1 (`BSP_MIC_SLOT_MIC1`) | ~570 | 60-95 (room) |
+  | 2 | MIC4, not connected | 0 | 0 |
+  | 3 | MIC2 (`BSP_MIC_SLOT_MIC2`) | ~440 | 60-95 (room) |
+
+  (MIC1 above MIC2 here only because the speaker was a little nearer to MIC1.) With only MIC1 + MIC2 selected, the same frame
+  shows index 1 and 3 and zeros at 0 and 2; writing REG12 (SDP interface 2) while running changes nothing.
+- **Shared frame**: TX and RX share BCLK / LRCK. While the microphone is open, the speaker must be opened with the same
+  2 x 32 bits (the sound in the upper 16 bits of each 32-bit sample, both channels); a mono 16-bit speaker open fails then.
+  Music / radio / video (microphone closed) keep mono 16 bit. Both directions also run at one sample rate.
+- **Gains**: microphones 30 dB (`esp_codec_dev_set_in_gain`); the reference is line level, set apart with
+  `esp_codec_dev_set_in_channel_gain(mic, ESP_CODEC_DEV_MAKE_CHANNEL_MASK(2), 12)` (the AI assistant uses 12 dB).
+- **Mixing the two microphones**: their mean is quieter than one microphone (they pick the voice slightly out of phase).
 
 ### 1.5 Open questions
 - What the LCD/touch module does at I2C address 0x28 (it belongs to the module: gone while GPIO22 is low).

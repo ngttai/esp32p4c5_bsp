@@ -28,6 +28,10 @@ Each example pulls the BSP from `bsp/esp32p4c5_bsp` through `main/idf_component.
 - Display: `bsp_display_start()`, `bsp_display_lock()`, `bsp_display_backlight_on()`.
 - Touch: `bsp_touch_new()`.
 - Audio: `bsp_audio_init()`, `bsp_audio_codec_speaker_init()`, `bsp_audio_codec_microphone_init()` (esp_codec_dev handles).
+  The microphone runs MIC1, MIC2 and **MIC3 = the speaker signal looped back in hardware (echo reference)**: open it with
+  `BSP_MIC_CHANNELS` x `BSP_MIC_BITS` (2 x 32 bit) and read frames of 4 int16, reference at `BSP_MIC_SLOT_REF` (0), microphones at
+  `BSP_MIC_SLOT_MIC1` (1) and `BSP_MIC_SLOT_MIC2` (3). While it is open the speaker must use the same 2 x 32 bit frame.
+  Measurements and wiring: `docs/hw_specs/hw_matrix.md`, section 1.4b.
 - Buttons: `bsp_iot_button_create()` for BOOT (GPIO35) and IO0 (GPIO0), used with the espressif/button API.
 - IMU: `bsp_imu_init()`, `bsp_imu_read()`.
 - microSD: `bsp_sdcard_mount()`, `bsp_sdcard_unmount()` (never formats the card); `bsp_sdcard_raw_init()`, `bsp_sdcard_raw_deinit()` for raw sector access without a filesystem (a USB mass storage drive, for example). The SDMMC host is shared with the SDIO link of the ESP32-C5 (slot 1): the raw deinit releases slot 0 only.

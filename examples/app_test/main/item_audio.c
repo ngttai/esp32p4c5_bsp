@@ -74,12 +74,22 @@ static void audio_task(void *arg)
     } else {
         const size_t n = RATE * REC_MS / 1000;
         int16_t *rec = heap_caps_malloc(n * sizeof(int16_t), MALLOC_CAP_SPIRAM);
+        /* the microphone frame: BSP_MIC_FRAME_SLOTS int16 (MIC1, MIC2, the echo reference), read as 2 x 32 bit */
+        int16_t *frames = heap_caps_malloc(n * BSP_MIC_FRAME_SLOTS * sizeof(int16_t), MALLOC_CAP_SPIRAM);
         esp_codec_dev_handle_t mic = bsp_audio_codec_microphone_init();
-        esp_codec_dev_sample_info_t fs = pcm16_mono();
-        if (rec && mic && esp_codec_dev_open(mic, &fs) == ESP_CODEC_DEV_OK) {
+        esp_codec_dev_sample_info_t fs = {
+            .sample_rate = RATE,
+            .channel = BSP_MIC_CHANNELS,
+            .bits_per_sample = BSP_MIC_BITS,
+        };
+        if (rec && frames && mic && esp_codec_dev_open(mic, &fs) == ESP_CODEC_DEV_OK) {
             esp_codec_dev_set_in_gain(mic, MIC_GAIN_DB);
-            s_failed = esp_codec_dev_read(mic, rec, n * sizeof(int16_t)) != ESP_CODEC_DEV_OK;
+            s_failed = esp_codec_dev_read(mic, frames, n * BSP_MIC_FRAME_SLOTS * sizeof(int16_t)) != ESP_CODEC_DEV_OK;
             esp_codec_dev_close(mic);
+            for (size_t i = 0; i < n; i++) {
+                const int16_t *fr = frames + i * BSP_MIC_FRAME_SLOTS;
+                rec[i] = (int16_t)((fr[BSP_MIC_SLOT_MIC1] + fr[BSP_MIC_SLOT_MIC2]) / 2);
+            }
             int peak = 0;
             for (size_t i = 0; i < n; i++) {
                 peak = abs(rec[i]) > peak ? abs(rec[i]) : peak;
@@ -92,6 +102,7 @@ static void audio_task(void *arg)
             s_failed = true;
         }
         free(rec);
+        free(frames);
     }
     s_done_job = job;
     s_busy = false;

@@ -502,8 +502,25 @@ esp_err_t bsp_audio_init(const i2s_std_config_t *i2s_config);
  */
 esp_codec_dev_handle_t bsp_audio_codec_speaker_init(void);
 
+/*
+ * Microphone frame. The ES7210 runs MIC1, MIC2 (the two MEMS microphones) and MIC3 (the speaker signal looped back
+ * from the ES8311 output through R7 / R10: a hardware echo reference) in TDM. Open the device with
+ * BSP_MIC_CHANNELS channels of BSP_MIC_BITS bits: each frame read is then BSP_MIC_FRAME_SLOTS int16 values, at the
+ * indexes below (measured: a tone played while recording shows only in the reference slot, exactly 0 otherwise).
+ * While the microphone is open, the speaker must be opened with the same channels and bits (TX and RX share the
+ * frame): write 2 x 32-bit samples, the sound in the upper 16 bits.
+ */
+#define BSP_MIC_CHANNELS     2
+#define BSP_MIC_BITS         32
+#define BSP_MIC_FRAME_SLOTS  4
+#define BSP_MIC_SLOT_REF     0      /*!< MIC3: the speaker signal (gain: ESP_CODEC_DEV_MAKE_CHANNEL_MASK(2)) */
+#define BSP_MIC_SLOT_MIC1    1
+#define BSP_MIC_SLOT_MIC2    3
+
 /**
- * @brief Get the microphone device (ES7210 + I2S0, MIC1 and MIC2), created on first call
+ * @brief Get the microphone device (ES7210 + I2S0: MIC1, MIC2 and the echo reference on MIC3), created on first call
+ *
+ * See BSP_MIC_CHANNELS and the slots above for the frame layout.
  *
  * @return esp_codec_dev handle, NULL on failure. Use esp_codec_dev_open/read/close.
  */

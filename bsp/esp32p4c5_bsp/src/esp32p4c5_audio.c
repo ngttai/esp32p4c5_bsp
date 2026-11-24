@@ -173,7 +173,10 @@ esp_codec_dev_handle_t bsp_audio_codec_microphone_init(void)
     es7210_codec_cfg_t es7210_cfg = {
         .ctrl_if = ctrl_if,
         .master_mode = false,
-        .mic_selected = ES7210_SEL_MIC1 | ES7210_SEL_MIC2,
+        /* MIC3 is the speaker signal looped back from the ES8311 output (R7 / R10, 0 ohm): the echo reference.
+         * Three inputs put the ES7210 in TDM: open the device with 2 channels of 32 bits, each frame then
+         * holds 4 slots of 16 bits */
+        .mic_selected = ES7210_SEL_MIC1 | ES7210_SEL_MIC2 | ES7210_SEL_MIC3,
     };
     const audio_codec_if_t *codec_if = es7210_codec_new(&es7210_cfg);
     if (codec_if == NULL) {
