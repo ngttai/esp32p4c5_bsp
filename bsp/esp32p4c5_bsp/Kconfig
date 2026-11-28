@@ -67,6 +67,35 @@ menu "Board Support Package (KSDIY ESP32-P4/C5)"
             default 5 if BSP_PMIC_CHARGE_VOLTAGE_4V40
     endmenu
 
+    menu "Audio (I2S0)"
+        config BSP_I2S_DMA_DESC_NUM
+            int "I2S DMA buffers per direction"
+            default 6
+            range 2 16
+            help
+                Number of DMA buffers of the speaker (TX) and of the microphones (RX) each.
+
+        config BSP_I2S_DMA_FRAME_NUM
+            int "Frames per I2S DMA buffer"
+            default 240
+            range 32 511
+            help
+                One frame = one sample of every slot. The buffers are internal DMA RAM:
+                DESC_NUM x FRAME_NUM x bytes per frame, per direction. Bytes per frame is
+                2 for 16-bit mono, 4 for 16-bit stereo, 8 for the microphone frame
+                (BSP_MIC_CHANNELS x BSP_MIC_BITS): 6 x 240 x 8 = 11.25 KB per direction.
+
+        config BSP_AUDIO_INIT_MIC_FRAME
+            bool "bsp_audio_init(NULL) starts with the microphone frame (2 x 32 bit)"
+            default y
+            help
+                The I2S driver frees and allocates its DMA buffers again whenever a codec is
+                opened with a frame of another size (16-bit music after the 2 x 32-bit
+                microphone, and back). Starting with the widest frame makes the first, largest
+                allocation happen in bsp_audio_init(), early, while internal RAM is still free.
+                Off: start with 16-bit mono (smallest buffers, the behaviour up to v0.3.0).
+    endmenu
+
     menu "4G modem (ML307C)"
         config BSP_MODEM_UART_NUM
             int "UART port of the modem"

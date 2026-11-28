@@ -143,8 +143,10 @@
 - **Mixing the two microphones**: their mean is quieter than one microphone (they pick the voice slightly out of phase).
 
 ### 1.5 Open questions
+(Answered: the charge current and voltage of the AXP2101 are read back by `bsp_battery_get_info()` (`charge_current_ma`,
+`charge_voltage_mv`); this board reads 300 mA with the BSP leaving the chip as it is. `CONFIG_BSP_PMIC_SET_CHARGER` writes
+200-1000 mA and 4.10 / 4.20 / 4.35 / 4.40 V from the battery datasheet. **[test]**)
 - What the LCD/touch module does at I2C address 0x28 (it belongs to the module: gone while GPIO22 is low).
-- Charge current and charge voltage actually programmed into the AXP2101 (hardware is known; the driver init sets nothing).
 - Source of the 820 Mbps DSI lane rate (the `esp_lcd_st7102` macro default is 500 Mbps).
 - MCP4725: confirm the logic-level explanation by measuring SDA/SCL at the chip (5.24 V supply, 3.3 V bus).
 

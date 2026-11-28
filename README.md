@@ -32,6 +32,10 @@ Each example pulls the BSP from `bsp/esp32p4c5_bsp` through `main/idf_component.
   `BSP_MIC_CHANNELS` x `BSP_MIC_BITS` (2 x 32 bit) and read frames of 4 int16, reference at `BSP_MIC_SLOT_REF` (0), microphones at
   `BSP_MIC_SLOT_MIC1` (1) and `BSP_MIC_SLOT_MIC2` (3). While it is open the speaker must use the same 2 x 32 bit frame.
   Measurements and wiring: `docs/hw_specs/hw_matrix.md`, section 1.4b.
+  Memory: the I2S DMA buffers are internal RAM and the driver allocates them again when a codec is opened with a frame of
+  another size; call `bsp_audio_init()` (or open the codecs) early, before Wi-Fi and esp-sr, or a later open can fail with
+  `ESP_ERR_NO_MEM`. Sizes: `CONFIG_BSP_I2S_DMA_DESC_NUM`, `CONFIG_BSP_I2S_DMA_FRAME_NUM`; `CONFIG_BSP_AUDIO_INIT_MIC_FRAME`
+  (default on) makes the first allocation the widest frame (2 x 32 bit).
 - Buttons: `bsp_iot_button_create()` for BOOT (GPIO35) and IO0 (GPIO0), used with the espressif/button API.
 - IMU: `bsp_imu_init()`, `bsp_imu_read()`.
 - microSD: `bsp_sdcard_mount()`, `bsp_sdcard_unmount()` (never formats the card); `bsp_sdcard_raw_init()`, `bsp_sdcard_raw_deinit()` for raw sector access without a filesystem (a USB mass storage drive, for example). The SDMMC host is shared with the SDIO link of the ESP32-C5 (slot 1): the raw deinit releases slot 0 only.

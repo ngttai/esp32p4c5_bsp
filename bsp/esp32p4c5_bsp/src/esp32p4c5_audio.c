@@ -12,6 +12,7 @@
 #include "es7210_adc.h"
 #include "es8311_codec.h"
 #include "esp_check.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "bsp/esp32p4c5_bsp.h"
 #include "bsp_err_check.h"
@@ -37,10 +38,17 @@ esp_err_t bsp_audio_init(const i2s_std_config_t *i2s_config)
 
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(BSP_I2S_NUM, I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true;
+    chan_cfg.dma_desc_num = CONFIG_BSP_I2S_DMA_DESC_NUM;
+    chan_cfg.dma_frame_num = CONFIG_BSP_I2S_DMA_FRAME_NUM;
     esp_err_t err = i2s_new_channel(&chan_cfg, &s_tx_chan, &s_rx_chan);
     ESP_RETURN_ON_ERROR(err, TAG, "i2s_new_channel failed");
 
+#if CONFIG_BSP_AUDIO_INIT_MIC_FRAME
+    /* the widest frame first: its DMA buffers are allocated now, while internal RAM is free */
+    const i2s_std_config_t default_cfg = BSP_I2S_DUPLEX_MIC_FRAME_CFG(BSP_AUDIO_DEFAULT_RATE);
+#else
     const i2s_std_config_t default_cfg = BSP_I2S_DUPLEX_MONO_CFG(BSP_AUDIO_DEFAULT_RATE);
+#endif
     const i2s_std_config_t *std_cfg = i2s_config ? i2s_config : &default_cfg;
     err = i2s_channel_init_std_mode(s_tx_chan, std_cfg);
     if (err == ESP_OK) {
@@ -53,7 +61,9 @@ esp_err_t bsp_audio_init(const i2s_std_config_t *i2s_config)
         err = i2s_channel_enable(s_rx_chan);
     }
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "I2S init failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "I2S init failed: %s (internal DMA RAM free %u, largest block %u)", esp_err_to_name(err),
+                 (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
         (void)i2s_del_channel(s_tx_chan);
         (void)i2s_del_channel(s_rx_chan);
         s_tx_chan = NULL;

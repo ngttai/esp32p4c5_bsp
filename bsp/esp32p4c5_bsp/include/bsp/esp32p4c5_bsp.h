@@ -483,14 +483,30 @@ esp_err_t bsp_imu_read(bsp_imu_raw_t *out);
         .gpio_cfg = BSP_I2S_GPIO_CFG,                                                                 \
     }
 
+/** 2 x 32-bit stereo, full duplex: the microphone frame (BSP_MIC_CHANNELS x BSP_MIC_BITS), the widest one */
+#define BSP_I2S_DUPLEX_MIC_FRAME_CFG(_sample_rate)                                                      \
+    {                                                                                                   \
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(_sample_rate),                                            \
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO), \
+        .gpio_cfg = BSP_I2S_GPIO_CFG,                                                                   \
+    }
+
 /**
  * @brief Init the I2S0 channels shared by the speaker and the microphones
  *
- * Called by bsp_audio_codec_speaker_init() and bsp_audio_codec_microphone_init(); call it first
- * only to pass a custom configuration. TX and RX share the clock, so playback and recording
- * always run at the same sample rate.
+ * Called by bsp_audio_codec_speaker_init() and bsp_audio_codec_microphone_init(). TX and RX share
+ * the clock, so playback and recording always run at the same sample rate.
  *
- * @param[in] i2s_config I2S configuration, NULL for BSP_I2S_DUPLEX_MONO_CFG(22050)
+ * Memory: the DMA buffers are internal DMA RAM (CONFIG_BSP_I2S_DMA_DESC_NUM x
+ * CONFIG_BSP_I2S_DMA_FRAME_NUM frames per direction), and the I2S driver allocates them again each
+ * time a codec is opened with a frame of another size. Call this function (or open the codecs)
+ * early, before Wi-Fi, esp-sr / AFE and other large internal allocations: an open that needs
+ * larger buffers later can fail with ESP_ERR_NO_MEM ("i2s_alloc_dma_desc: allocate DMA buffer
+ * failed"). With CONFIG_BSP_AUDIO_INIT_MIC_FRAME (default) the first allocation is already the
+ * widest frame.
+ *
+ * @param[in] i2s_config I2S configuration, NULL for BSP_I2S_DUPLEX_MIC_FRAME_CFG(22050)
+ *                       (BSP_I2S_DUPLEX_MONO_CFG(22050) without CONFIG_BSP_AUDIO_INIT_MIC_FRAME)
  * @return ESP_OK on success, else the I2S or esp_codec_dev error
  */
 esp_err_t bsp_audio_init(const i2s_std_config_t *i2s_config);
